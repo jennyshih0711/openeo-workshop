@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed(){return request.auth!=null;}
+  function admin(){return signed() && request.auth.token.email=='jennyshih0711@gmail.com' && request.auth.token.email_verified==true && request.auth.token.firebase.sign_in_provider=='google.com';}
+  function memberGroup(id){return getAfter(/databases/$(database)/documents/roster/$(id)).data.groupId;}
+  function linked(m,g){return (m.size()<1||memberGroup(m[0])==g)&&(m.size()<2||memberGroup(m[1])==g)&&(m.size()<3||memberGroup(m[2])==g);}
+  function released(m,next,g){return (m.size()<1||m[0] in next||memberGroup(m[0])!=g)&&(m.size()<2||m[1] in next||memberGroup(m[1])!=g)&&(m.size()<3||m[2] in next||memberGroup(m[2])!=g);}
+  match /registrations/{id}{
+   allow get: if admin() || (signed() && request.auth.uid==id);
+   allow list: if admin();
+   allow create: if signed() && request.auth.uid==id
+    && request.resource.data.keys().hasOnly(['name','email','phone','dept','meal','createdAt'])
+    && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=100
+    && request.resource.data.email is string && request.resource.data.email.size()>3 && request.resource.data.email.size()<=254
+    && request.resource.data.phone is string && request.resource.data.phone.size()>0 && request.resource.data.phone.size()<=40
+    && request.resource.data.dept is string && request.resource.data.dept.size()>0 && request.resource.data.dept.size()<=200
+    && request.resource.data.meal in ['葷食','素食'] && request.resource.data.createdAt==request.time
+    && getAfter(/databases/$(database)/documents/roster/$(id)).data.name==request.resource.data.name;
+  }
+  match /roster/{id}{
+   allow read: if signed();
+   allow create: if signed() && request.auth.uid==id
+    && request.resource.data.keys().hasOnly(['name','groupId','createdAt'])
+    && request.resource.data.groupId=='' && request.resource.data.createdAt==request.time
+    && request.resource.data.name==getAfter(/databases/$(database)/documents/registrations/$(id)).data.name;
+   allow update: if signed() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['groupId'])
+    && request.resource.data.groupId is string
+    && (request.resource.data.groupId=='' || id in getAfter(/databases/$(database)/documents/teams/$(request.resource.data.groupId)).data.members)
+    && (resource.data.groupId=='' || resource.data.groupId==request.resource.data.groupId || !(id in getAfter(/databases/$(database)/documents/teams/$(resource.data.groupId)).data.members));
+  }
+  match /teams/{id}{
+   allow read: if signed();
+   allow create: if signed() && request.resource.data.keys().hasOnly(['members','createdAt','creator'])
+    && request.resource.data.members==[] && request.resource.data.createdAt==request.time && request.resource.data.creator==request.auth.uid;
+   allow update: if signed() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+    && request.resource.data.members is list && request.resource.data.members.size()<=3
+    && request.resource.data.members.toSet().size()==request.resource.data.members.size()
+    && linked(request.resource.data.members,id) && released(resource.data.members,request.resource.data.members,id);
+   allow delete: if signed() && resource.data.members.size()==0;
+  }
+ }
+}
+

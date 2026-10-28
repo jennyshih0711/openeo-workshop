@@ -9,7 +9,8 @@ service cloud.firestore {
   match /registrations/{id}{
    allow get: if admin() || (signed() && request.auth.uid==id);
    allow list: if admin();
-   allow create: if signed() && request.auth.uid==id
+   allow create: if false // Registration closed on 2026-10-28.
+    && signed() && request.auth.uid==id
     && request.resource.data.keys().hasOnly(['name','email','phone','dept','meal','createdAt'])
     && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=100
     && request.resource.data.email is string && request.resource.data.email.size()>3 && request.resource.data.email.size()<=254
@@ -20,7 +21,8 @@ service cloud.firestore {
   }
   match /roster/{id}{
    allow read: if signed();
-   allow create: if signed() && request.auth.uid==id
+   allow create: if false // Registration closed on 2026-10-28.
+    && signed() && request.auth.uid==id
     && request.resource.data.keys().hasOnly(['name','groupId','createdAt'])
     && request.resource.data.groupId=='' && request.resource.data.createdAt==request.time
     && request.resource.data.name==getAfter(/databases/$(database)/documents/registrations/$(id)).data.name;
